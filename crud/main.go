@@ -2,14 +2,29 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/julienschmidt/httprouter"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var DB *sql.DB
+
+type User struct {
+	ID         int       `json:"userid"`
+	Username   string    `json:"username"`
+	Department string    `json:"department"`
+	Created    time.Time `json:"created"`
+}
+
+type Users struct {
+	Users []User `json:"users"`
+}
 
 func main() {
 	db, err := sql.Open("sqlite3", "../users.db")
@@ -18,22 +33,69 @@ func main() {
 		log.Fatal("Problem opening database file: ", err.Error())
 	}
 
-	getUsers()
+	//close the database when this function exits
+	defer DB.Close()
 
-	for i := 1; i < 6; i++ {
-		deleteUser(i)
-	}
+	//createUser("srf", "dev", time.Now().UTC())
 
-	//close the database
-	DB.Close()
+	//users := getUsers()
+	//fmt.Println(users)
+
+	//	for i := 1; i < 6; i++ {
+	//		deleteUser(i)
+	//	}
+
+	//define the routes
+	routes := httprouter.New()
+
+	routes.GET("/users", usersGet)
+
+	routes.GET("/users/:id", userGet)
+	http.ListenAndServe("localhost:1234", routes)
 }
 
-func createUser(username, departname string, created time.Time) {
-	//insert
+func usersGet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	users := getUsers()
+
+	output, err := json.Marshal(users)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	fmt.Fprintf(w, string(output))
+}
+
+func userGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+	if id == "" {
+		log.Println("Empty ID")
+		return
+	}
+
+	uid, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "Problem reading ID", http.StatusBadRequest)
+	}
+
+	user := getUser(uid)
+
+	output, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, "Problem getting user", http.StatusInternalServerError)
+	}
+
+	fmt.Fprint(w, string(output))
+}
+
+//helper function to create user
+func createUser(username, department string, created time.Time) {
+	//create the new user
 	stmt, err := DB.Prepare("INSERT INTO userinfo(username, departname, created) VALUES(?,?,?)")
 
-	fmt.Println(stmt)
-	res, err := stmt.Exec("steven", "development", "2017-04-29")
+	//fmt.Println(stmt)
+
+	//res, err := stmt.Exec("steven", "development", "2017-04-29")
+	res, err := stmt.Exec(username, department, created)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -52,28 +114,53 @@ func createUser(username, departname string, created time.Time) {
 	}
 }
 
-func getUsers() {
+//returns all the user from the database
+func getUsers() Users {
+	//get the rows
 	rows, err := DB.Query("SELECT * FROM userinfo")
+	//check if an error is returned
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	var uid int
-	var username string
-	var department string
-	var created time.Time
+	//close the rows when this function ends/returns
+	defer rows.Close()
 
+	//create a Users struct basically
+	//an array in other languages
+	users := Users{}
 	for rows.Next() {
-		err = rows.Scan(&uid, &username, &department, &created)
+		user := User{}
+		//get the contents of the current row
+		err = rows.Scan(&user.ID, &user.Username, &user.Department, &user.Created)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
 
-		out := fmt.Sprintf("%d %s %s %v", uid, username, department, created)
-		fmt.Println(out)
+		//add to our array
+		users.Users = append(users.Users, user)
 	}
 
-	rows.Close()
+	//encode the struct to bytes
+	//note the json equivalent from the above
+	//output, err := json.Marshal(users)
+	//if err != nil {
+	//	log.Fatal(err.Error())
+	//}
+
+	//return string(output)
+	return users
+}
+
+//returns a specific user
+func getUser(uid int) User {
+	user := User{}
+	err := DB.QueryRow("SELECT * FROM userinfo WHERE uid=?", uid).Scan(&user.ID, &user.Username, &user.Department, &user.Created)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	return user
 }
 
 func deleteUser(uid int) {
