@@ -49,8 +49,11 @@ func main() {
 	routes := httprouter.New()
 
 	routes.GET("/users", usersGet)
+	routes.POST("/users", usersPost)
 
 	routes.GET("/users/:id", userGet)
+	routes.PUT("/users/:id", userPut)
+	routes.DELETE("/users/:id", userDel)
 	http.ListenAndServe("localhost:1234", routes)
 }
 
@@ -63,6 +66,19 @@ func usersGet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	}
 
 	fmt.Fprintf(w, string(output))
+}
+
+func usersPost(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	username := r.FormValue("username")
+	department := r.FormValue("department")
+
+	if username == "" || department == "" {
+		http.Error(w, "Cannot have empty values", http.StatusBadRequest)
+	}
+
+	//begin creating user
+	createUser(username, department, time.Now().UTC())
+
 }
 
 func userGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -87,6 +103,55 @@ func userGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	fmt.Fprint(w, string(output))
 }
 
+func userPut(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+	if id == "" {
+		log.Println("Empty ID")
+		return
+	}
+
+	uid, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "Problem reading ID", http.StatusBadRequest)
+		return
+	}
+
+	username := r.FormValue("newusername")
+	if username == "" {
+		http.Error(w, "Specify a new username", http.StatusBadRequest)
+		return
+	}
+
+	err = updateUser(uid, username)
+	if err != nil {
+		http.Error(w, "Error updating user", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprint(w, "Update complete!")
+}
+
+func userDel(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+	if id == "" {
+		log.Println("Empty ID")
+		return
+	}
+
+	uid, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "Problem reading ID", http.StatusBadRequest)
+		return
+	}
+
+	err = deleteUser(uid)
+	if err != nil {
+		http.Error(w, "Problem deleting user", http.StatusInternalServerError)
+	}
+
+	fmt.Fprint(w, "User deleted!")
+}
+
 //helper function to create user
 func createUser(username, department string, created time.Time) {
 	//create the new user
@@ -107,11 +172,17 @@ func createUser(username, department string, created time.Time) {
 	}
 
 	fmt.Println("Last Inserted ID: ", id)
-	//update
-	stmt, err = DB.Prepare("UPDATE userinfo SET username=? WHERE uid=?")
+
+}
+
+//updates a user's username
+func updateUser(uid int, username string) error {
+	//update selected user
+	_, err := DB.Exec("UPDATE userinfo SET username=? WHERE uid=?", username, uid)
 	if err != nil {
-		log.Fatal(err.Error())
+		return err
 	}
+	return nil
 }
 
 //returns all the user from the database
@@ -163,25 +234,27 @@ func getUser(uid int) User {
 	return user
 }
 
-func deleteUser(uid int) {
+func deleteUser(uid int) error {
 	stmt, err := DB.Prepare("DELETE FROM userinfo WHERE uid=?")
 	if err != nil {
-		log.Fatal(err.Error())
+		return err
 	}
 
 	fmt.Println("Deleting user:", uid)
 	res, err := stmt.Exec(uid)
 	if err != nil {
-		log.Fatal(err.Error())
+		return err
 	}
 
 	affect, err := res.RowsAffected()
 	if err != nil {
-		log.Fatal(err.Error())
+		return err
 	}
 	if affect > 0 {
 		fmt.Println("Deleted user:", uid)
 	} else {
 		fmt.Println("No rows affected")
 	}
+
+	return nil
 }
