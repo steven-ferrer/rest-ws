@@ -13,8 +13,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+//DB database type, well use to interact with database
 var DB *sql.DB
 
+//User our sample resource
 type User struct {
 	ID         int       `json:"userid"`
 	Username   string    `json:"username"`
@@ -22,6 +24,7 @@ type User struct {
 	Created    time.Time `json:"created"`
 }
 
+//Users collection of users
 type Users struct {
 	Users []User `json:"users"`
 }

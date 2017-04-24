@@ -8,10 +8,14 @@ import (
 	"strconv"
 )
 
+//Resp types that are in uppercase
+//are exported (like public properties)
 type Resp struct {
 	Result int `json:"result"`
 }
 
+//addFunc types that are in lowercase are not exported
+//in other languages, these are private properties
 func addFunc(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusForbidden)
@@ -51,11 +55,17 @@ func addFunc(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, string(out))
 }
 
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	//writes a string to the response
+	//in this case, it writes the string "index"
+	w.Write([]byte("Index")) //and convertes it to slice(similar to arrays) of bytes
+}
+
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Index"))
-	})
-	http.HandleFunc("/add", addFunc)
+	//here we are registering a handler function (could be thought as
+	// callback functions (javascript anyone?))
+	http.HandleFunc("/", indexHandler) //this is quite a familiar syntax
+	http.HandleFunc("/add", addFunc)   //for those who have used javascript
 	//Exercise 1:
 	//Implement the mult, div, and sub
 	log.Println("Server listening on :9398")
