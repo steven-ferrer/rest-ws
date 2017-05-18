@@ -1,2 +1,2 @@
 # rest-ws
-simple demonstration of REST web service
+naive example of REST web service
