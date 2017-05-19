@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/go-zoo/bone"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -39,32 +39,30 @@ func main() {
 	//close the database when this function exits
 	defer DB.Close()
 
-	//createUser("srf", "dev", time.Now().UTC())
+	//define the mux
+	mux := bone.New()
 
-	//users := getUsers()
-	//fmt.Println(users)
+	mux.GetFunc("/users", usersGet)
+	mux.PostFunc("/users", usersPost)
 
-	//	for i := 1; i < 6; i++ {
-	//		deleteUser(i)
-	//	}
+	mux.GetFunc("/users/:id", userGet)
+	mux.PutFunc("/users/:id", userPut)
+	mux.DeleteFunc("/users/:id", userDel)
 
-	//define the routes
-	routes := httprouter.New()
-
-	routes.GET("/users", usersGet)
-	routes.POST("/users", usersPost)
-
-	routes.GET("/users/:id", userGet)
-	routes.PUT("/users/:id", userPut)
-	routes.DELETE("/users/:id", userDel)
+	server := &http.Server{
+		Addr:         ":1234",
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
 
 	log.Println("Server started on localhost:1234")
 
-	//use the routes as multiplexer/handler
-	http.ListenAndServe("localhost:1234", routes)
+	//use the mux as multiplexer/handler
+	log.Fatal(server.ListenAndServe())
 }
 
-func usersGet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func usersGet(w http.ResponseWriter, r *http.Request) {
 	logRequest(r)
 	users, err := getUsers()
 	if err != nil {
@@ -83,7 +81,7 @@ func usersGet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	fmt.Fprintf(w, string(output))
 }
 
-func usersPost(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func usersPost(w http.ResponseWriter, r *http.Request) {
 	logRequest(r)
 	username := r.FormValue("username")
 	department := r.FormValue("department")
@@ -105,9 +103,9 @@ func usersPost(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 }
 
-func userGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func userGet(w http.ResponseWriter, r *http.Request) {
 	logRequest(r)
-	id := ps.ByName("id")
+	id := bone.GetValue(r, "id")
 	if id == "" {
 		log.Println("Empty ID")
 		http.Error(w, "Cannot have Empty ID", http.StatusBadRequest) //400
@@ -136,11 +134,11 @@ func userGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	fmt.Fprint(w, string(output)) //write to client
 }
 
-func userPut(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func userPut(w http.ResponseWriter, r *http.Request) {
 	logRequest(r)
 	//this will only modify the username, if you want,
 	//you can add more fields to be updated
-	id := ps.ByName("id")
+	id := bone.GetValue(r, "id")
 	if id == "" {
 		log.Println("Empty ID")
 		http.Error(w, "Cannot have Empty ID's", http.StatusBadRequest) //400
@@ -169,9 +167,9 @@ func userPut(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	fmt.Fprint(w, "Update complete!")
 }
 
-func userDel(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func userDel(w http.ResponseWriter, r *http.Request) {
 	logRequest(r)
-	id := ps.ByName("id")
+	id := bone.GetValue(r, "id")
 	if id == "" {
 		log.Println("Empty ID")
 		http.Error(w, "Cannot have Empty ID", http.StatusBadRequest) //400
@@ -254,13 +252,6 @@ func getUsers() (Users, error) {
 		//add to our array
 		users.Users = append(users.Users, user)
 	}
-
-	//encode the struct to bytes
-	//note the json equivalent from the above
-	//output, err := json.Marshal(users)
-	//if err != nil {
-	//	log.Fatal(err.Error())
-	//}
 
 	//return string(output)
 	return users, nil

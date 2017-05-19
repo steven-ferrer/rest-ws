@@ -7,6 +7,7 @@ package main //every go program is made of package
 //obviously fmt
 import (
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -17,7 +18,7 @@ func main() {
 	http.HandleFunc("/", indexFunc)
 
 	//Make the server listen
-	http.ListenAndServe("localhost:1234", nil)
+	log.Fatal(http.ListenAndServe(":1234", nil))
 }
 
 func indexFunc(w http.ResponseWriter, r *http.Request) {
